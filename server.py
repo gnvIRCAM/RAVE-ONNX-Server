@@ -17,12 +17,12 @@ model_path = "./models"
 
 
 # Routine executée avant la premiere requete qui permet de lire la liste des modèles
-@app.before_first_request
 def init():
-	models_list = os.listdir("./models")
-	print(models_list)
-	session["models"] = models_list
-	session["currentModel"] = models_list[0]
+    with app.app_context():
+        models_list = os.listdir("./models")
+        print(models_list)
+        session["models"] = models_list
+        session["currentModel"] = models_list[0]
 
 
 # Réponse à une requete vide
