@@ -10,6 +10,10 @@ import soundfile as sf
 app = Flask(__name__)
 app.secret_key = "super secret key"
 
+# Global variables (credits to Jacques Zhuang)
+MODELS_LIST = []
+CURRENT_MODEL = None
+
 # Original:
 # CORS(app, expose_headers='Authorization')
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True, expose_headers='Authorization')
@@ -18,12 +22,11 @@ model_path = "./models"
 
 # Routine executée avant la premiere requete qui permet de lire la liste des modèles
 def init():
-    with app.app_context():
-        models_list = os.listdir("./models")
-        print(models_list)
-        session["models"] = models_list
-        session["currentModel"] = models_list[0]
-
+    global MODELS_LIST, CURRENT_MODEL
+    MODELS_LIST = os.listdir("./models")
+    # print(models_list)
+    if CURRENT_MODEL is None:
+        CURRENT_MODEL = MODELS_LIST[0 ]
 
 # Réponse à une requete vide
 @app.route("/")
@@ -34,8 +37,7 @@ def main():
 # Upload un fichier et conversion de l'audio avec le modèle
 @app.route("/upload", methods=['POST'])
 def upload():
-    # FIXME: L'initialisation ne fonctionne pas lorsque la requête est effectuée avec fetch
-    # On doit donc l'appeler manuellement
+    global MODELS_LIST, CURRENT_MODEL
     init()
     try:
         print('Files:', request.files)
@@ -54,7 +56,7 @@ def upload():
             return 'Error loading audio file'
         audio = np.expand_dims(audio, (0, 1))
         sess = rt.InferenceSession(os.path.join(model_path,
-                                                session["currentModel"]),
+                                                CURRENT_MODEL),
                                    providers=rt.get_available_providers())
         res = sess.run([sess.get_outputs()[0].name], {"audio_in": audio})
         if res is None:
@@ -77,26 +79,25 @@ def download():
 # Récupérer les modèles disponibles
 @app.route('/getmodels')
 def getModels():
+    global MODELS_LIST
     init()
-    # Ensure 'models' key exists in session, set default if not
-    if 'models' not in session:
-        session['models'] = []  # Assuming default value is an empty list, adjust as needed
-    models = {"models": session["models"]}
-    return models
+    return {"models": MODELS_LIST}
 
 
 # Selection du modèle à utiliser
 @app.route("/selectModel/<modelName>")
 def setModel(modelName):
-	init()
-	if modelName not in session["models"]:
-		return "model not found ! "
-	else:
-		if modelName[-5:] != ".onnx":
-			modelName += ".onnx"
-		session["currentModel"] = modelName
-		print(f'Selected model : {modelName}')
-		return f"model selected - {modelName}"
+    global MODELS_LIST, CURRENT_MODEL
+    if not len(MODELS_LIST):
+        init()
+    if modelName not in MODELS_LIST:
+        return "model not found ! "
+    else:
+        if modelName[-5:] != ".onnx":
+            modelName += ".onnx"
+        CURRENT_MODEL = modelName
+        print(f'Selected model : {modelName}')
+        return f"model selected - {modelName}"
 
 
 if __name__ == '__main__':
